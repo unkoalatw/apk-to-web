@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web2APK Studio - 網址打包 Android 應用程式工具</title>
+    <meta name="description" content="免費線上網址打包工具，將任何網站一鍵轉換為 Android WebView APK 應用程式與 Android Studio 專案。">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Noto+Sans+TC:wght@300;400;500;700;900&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- JSZip CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Top Navigation Header -->
+        <header class="top-header">
+            <div class="header-brand">
+                <div class="logo-icon">
+                    <i data-lucide="smartphone"></i>
+                </div>
+                <div class="brand-text">
+                    <h1>Web2APK <span class="badge">PRO</span></h1>
+                    <span class="subtext">網址打包 Android APK 動態工具</span>
+                </div>
+            </div>
+            
+            <div class="header-status">
+                <div class="status-chip" id="sdk-status-chip">
+                    <span class="dot green"></span>
+                    <span id="sdk-status-text">Android SDK 官方工具鏈已連線</span>
+                </div>
+                <button id="theme-toggle-btn" class="btn-icon" title="切換主題 Mode">
+                    <i data-lucide="moon"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="main-wrapper">
+            <!-- Left Config Panel -->
+            <section class="config-panel">
+                <!-- Step Indicator -->
+                <nav class="steps-nav">
+                    <button class="step-btn active" data-step="1">
+                        <span class="step-num">1</span>
+                        <span class="step-label">網站資訊</span>
+                    </button>
+                    <button class="step-btn" data-step="2">
+                        <span class="step-num">2</span>
+                        <span class="step-label">圖標與品牌</span>
+                    </button>
+                    <button class="step-btn" data-step="3">
+                        <span class="step-num">3</span>
+                        <span class="step-label">WebView 功能</span>
+                    </button>
+                    <button class="step-btn" data-step="4">
+                        <span class="step-num">4</span>
+                        <span class="step-label">打包與匯出</span>
+                    </button>
+                </nav>
+
+                <form id="apk-config-form" onsubmit="return false;">
+                    <!-- Step 1: Website Details -->
+                    <div class="step-content active" id="step-1">
+                        <div class="section-card">
+                            <h2 class="section-title">
+                                <i data-lucide="globe"></i> 1. 目標網站設定
+                            </h2>
+                            <p class="section-desc">請輸入您想要封裝成 Android App 的網址。</p>
+
+                            <div class="form-group">
+                                <label for="target-url">網站網址 (URL) <span class="req">*</span></label>
+                                <div class="url-input-wrapper">
+                                    <input type="url" id="target-url" placeholder="https://example.com" value="https://example.com" required>
+                                    <button type="button" id="btn-fetch-favicon" class="btn-secondary btn-sm" title="自動擷取網站圖標">
+                                        <i data-lucide="download-cloud"></i> 自動抓取圖標
+                                    </button>
+                                </div>
+                                <span class="input-hint">請填寫完整的網址，包含 https:// 或 http://</span>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group col-6">
+                                    <label for="app-name">App 名稱 <span class="req">*</span></label>
+                                    <input type="text" id="app-name" placeholder="例如：我的線上商店" value="異環儲值" required>
+                                </div>
+                                <div class="form-group col-6">
+                                    <label for="package-name">Package Name (套件識別碼)</label>
+                                    <input type="text" id="package-name" placeholder="com.company.app" value="com.web2apk.yihuan">
+                                    <span class="input-hint">Android 系統唯一識別碼（限定英文字母與數字）</span>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="user-agent-preset">User-Agent (瀏覽器識別)</label>
+                                <select id="user-agent-preset">
+                                    <option value="default">預設 Android Chrome User-Agent</option>
+                                    <option value="desktop">強制 Desktop Chrome (電腦版網站)</option>
+                                    <option value="custom">自訂 User-Agent</option>
+                                </select>
+                                <input type="text" id="custom-user-agent" class="hidden-field" placeholder="輸入自訂 User-Agent 字串...">
+                            </div>
+                        </div>
+
+                        <div class="step-actions">
+                            <button type="button" class="btn-primary next-step-btn">
+                                下一步：圖標與品牌 <i data-lucide="arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Branding & Icons -->
+                    <div class="step-content" id="step-2">
+                        <div class="section-card">
+                            <h2 class="section-title">
+                                <i data-lucide="image"></i> 2. 圖標設計與品牌色彩
+                            </h2>
+                            <p class="section-desc">上傳或設計您的 App 桌面圖標與主題視覺。</p>
+
+                            <!-- Icon Upload & Canvas Studio -->
+                            <div class="icon-studio-box">
+                                <div class="icon-preview-wrapper">
+                                    <canvas id="icon-canvas" width="512" height="512"></canvas>
+                                    <div class="icon-shape-mask squircle" id="icon-mask-preview"></div>
+                                </div>
+                                <div class="icon-controls">
+                                    <div class="btn-group-sm">
+                                        <label for="icon-file-input" class="btn-secondary btn-sm">
+                                            <i data-lucide="upload"></i> 上傳圖片
+                                        </label>
+                                        <input type="file" id="icon-file-input" accept="image/*" class="hidden-input">
+                                        <button type="button" id="btn-generate-text-logo" class="btn-secondary btn-sm">
+                                            <i data-lucide="type"></i> 文字 Logo
+                                        </button>
+                                    </div>
+
+                                    <div class="control-row">
+                                        <label>圖標裁切形狀</label>
+                                        <div class="chip-options" id="shape-selector">
+                                            <button type="button" class="chip active" data-shape="squircle">圓角矩形 (Squircle)</button>
+                                            <button type="button" class="chip" data-shape="circle">正圓形 (Circle)</button>
+                                            <button type="button" class="chip" data-shape="square">正方形 (Square)</button>
+                                        </div>
+                                    </div>
+
+                                    <div class="control-row">
+                                        <label for="icon-bg-color">圖標背景填充色</label>
+                                        <div class="color-picker-row">
+                                            <input type="color" id="icon-bg-color" value="#ffffff">
+                                            <span class="color-val" id="icon-bg-val">#FFFFFF</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="control-row">
+                                        <label for="icon-padding">圖標內邊距 (Padding)</label>
+                                        <input type="range" id="icon-padding" min="0" max="100" value="20">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Color Themes & Splash -->
+                            <div class="form-row margin-top">
+                                <div class="form-group col-6">
+                                    <label for="theme-color">主題主要色彩 (Theme Color)</label>
+                                    <div class="color-picker-row">
+                                        <input type="color" id="theme-color" value="#4f46e5">
+                                        <span class="color-val" id="theme-color-val">#4F46E5</span>
+                                    </div>
+                                    <span class="input-hint">用於 TopBar 與導覽列色彩</span>
+                                </div>
+                                <div class="form-group col-6">
+                                    <label for="status-bar-color">頂部狀態欄顏色 (Status Bar)</label>
+                                    <div class="color-picker-row">
+                                        <input type="color" id="status-bar-color" value="#3730a3">
+                                        <span class="color-val" id="status-bar-val">#3730A3</span>
+                                    </div>
+                                    <span class="input-hint">手機頂部時間與電池欄顏色</span>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group col-6">
+                                    <label for="splash-bg-color">啟動畫面背景色 (Splash Color)</label>
+                                    <div class="color-picker-row">
+                                        <input type="color" id="splash-bg-color" value="#0f172a">
+                                        <span class="color-val" id="splash-bg-val">#0F172A</span>
+                                    </div>
+                                </div>
+                                <div class="form-group col-6">
+                                    <label for="splash-duration">啟動畫面停留時間</label>
+                                    <select id="splash-duration">
+                                        <option value="1000">1.0 秒 (極速)</option>
+                                        <option value="2000" selected>2.0 秒 (推薦)</option>
+                                        <option value="3000">3.0 秒</option>
+                                        <option value="0">無啟動畫面</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="step-actions">
+                            <button type="button" class="btn-secondary prev-step-btn">
+                                <i data-lucide="arrow-left"></i> 上一步
+                            </button>
+                            <button type="button" class="btn-primary next-step-btn">
+                                下一步：WebView 功能 <i data-lucide="arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: WebView Features -->
+                    <div class="step-content" id="step-3">
+                        <div class="section-card">
+                            <h2 class="section-title">
+                                <i data-lucide="sliders"></i> 3. WebView 功能與體驗設定
+                            </h2>
+                            <p class="section-desc">開關 App 內建互動功能與權限要求。</p>
+
+                            <div class="toggle-grid">
+                                <div class="toggle-item">
+                                    <div class="toggle-info">
+                                        <span class="toggle-title">下拉重新整理 (Pull-to-Refresh)</span>
+                                        <span class="toggle-desc">滑動網頁頂部觸發重新整理</span>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="feature-pull-refresh" checked>
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+
+                                <div class="toggle-item">
+                                    <div class="toggle-info">
+                                        <span class="toggle-title">手勢返回/上一頁 (Swipe Navigation)</span>
+                                        <span class="toggle-desc">支援側滑或實體按鍵返回歷史紀錄</span>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="feature-swipe-back" checked>
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+
+                                <div class="toggle-item">
+                                    <div class="toggle-info">
+                                        <span class="toggle-title">顯示頂部 App Header 標題欄</span>
+                                        <span class="toggle-desc">關閉即可開啟全螢幕體驗</span>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="feature-show-appbar">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+
+                                <div class="toggle-item">
+                                    <div class="toggle-info">
+                                        <span class="toggle-title">允許網頁檔案上傳/相機 (File Uploads)</span>
+                                        <span class="toggle-desc">允許上傳圖片、文件或拍照</span>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="feature-allow-file" checked>
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+
+                                <div class="toggle-item">
+                                    <div class="toggle-info">
+                                        <span class="toggle-title">允許網頁雙指捏合縮放 (Zoom)</span>
+                                        <span class="toggle-desc">啟用 WebView 縮放手勢</span>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="feature-zoom">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+
+                                <div class="toggle-item">
+                                    <div class="toggle-info">
+                                        <span class="toggle-title">JavaScript 腳本支援</span>
+                                        <span class="toggle-desc">必須開啟才能運行動態 DOM 網頁</span>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="feature-javascript" checked disabled>
+                                        <span class="slider round"></span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="form-group margin-top">
+                                <label for="screen-orientation">螢幕方向鎖定 (Orientation)</label>
+                                <select id="screen-orientation">
+                                    <option value="unspecified">跟隨系統自動旋轉 (Auto Rotate)</option>
+                                    <option value="portrait" selected>強制直向 (Portrait Only)</option>
+                                    <option value="landscape">強制橫向 (Landscape Only)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="step-actions">
+                            <button type="button" class="btn-secondary prev-step-btn">
+                                <i data-lucide="arrow-left"></i> 上一步
+                            </button>
+                            <button type="button" class="btn-primary next-step-btn">
+                                下一步：即時預覽與匯出 <i data-lucide="arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Export -->
+                    <div class="step-content" id="step-4">
+                        <div class="section-card">
+                            <h2 class="section-title">
+                                <i data-lucide="package-check"></i> 4. 匯出封裝應用程式
+                            </h2>
+                            <p class="section-desc">確認設定無誤後，請點擊下方按鈕進行 Android SDK 官方編譯。</p>
+
+                            <div class="export-options-grid">
+                                <!-- Option A: Android APK -->
+                                <div class="export-card primary-export">
+                                    <div class="export-badge">V1+V2+V3 官方簽署</div>
+                                    <div class="export-icon"><i data-lucide="android"></i></div>
+                                    <h3>下載 Android APK (.apk)</h3>
+                                    <p>調用本機 Android SDK (aapt2 + d8 + apksigner) 即時構建，100% 保證可成功安裝。</p>
+                                    <button type="button" id="btn-export-apk" class="btn-build">
+                                        <i data-lucide="download"></i> 立即產生與下載 APK
+                                    </button>
+                                </div>
+
+                                <!-- Option B: Android Studio Project -->
+                                <div class="export-card">
+                                    <div class="export-icon"><i data-lucide="code-2"></i></div>
+                                    <h3>Android Studio 專案 (.zip)</h3>
+                                    <p>完整原始碼專案 (Gradle + Kotlin/Java)，可在 Android Studio 中開啓與自訂。</p>
+                                    <button type="button" id="btn-export-source" class="btn-secondary full-width">
+                                        <i data-lucide="folder-archive"></i> 下載原始碼 ZIP
+                                    </button>
+                                </div>
+
+                                <!-- Option C: PWA Package -->
+                                <div class="export-card">
+                                    <div class="export-icon"><i data-lucide="globe"></i></div>
+                                    <h3>WebAPK / PWA 設定包 (.zip)</h3>
+                                    <p>包含 manifest.json、ServiceWorker 及 HTML 重導向封裝檔。</p>
+                                    <button type="button" id="btn-export-pwa" class="btn-secondary full-width">
+                                        <i data-lucide="file-json"></i> 下載 PWA 檔
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Build Log Overlay / Box -->
+                            <div id="build-progress-box" class="build-box hidden-box">
+                                <div class="build-header">
+                                    <span class="spinner-sm"></span>
+                                    <span id="build-status-text">正在調用 Android SDK 官方工具鏈構建中...</span>
+                                </div>
+                                <div class="progress-bar-track">
+                                    <div id="build-progress-bar" class="progress-bar-fill"></div>
+                                </div>
+                                <pre id="build-logs" class="log-console"></pre>
+                            </div>
+                        </div>
+
+                        <div class="step-actions">
+                            <button type="button" class="btn-secondary prev-step-btn">
+                                <i data-lucide="arrow-left"></i> 上一步修改設定
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Right Mobile Simulator Section -->
+            <section class="simulator-section">
+                <div class="simulator-sticky-box">
+                    <div class="simulator-header-bar">
+                        <span class="title"><i data-lucide="smartphone"></i> 即時裝置模擬預覽</span>
+                        <div class="sim-controls">
+                            <button type="button" id="sim-btn-splash" class="sim-tab-btn active" title="模擬啟動畫面">Splash 頁</button>
+                            <button type="button" id="sim-btn-app" class="sim-tab-btn" title="模擬 WebView 畫面">App 內頁</button>
+                            <button type="button" id="sim-btn-home" class="sim-tab-btn" title="模擬手機桌面">桌面圖標</button>
+                        </div>
+                    </div>
+
+                    <!-- Phone Frame -->
+                    <div class="phone-frame">
+                        <!-- Camera Notch -->
+                        <div class="phone-notch"></div>
+                        
+                        <!-- Status Bar -->
+                        <div class="phone-status-bar" id="sim-status-bar">
+                            <span class="time">09:41</span>
+                            <div class="icons">
+                                <i data-lucide="wifi"></i>
+                                <i data-lucide="battery-charging"></i>
+                            </div>
+                        </div>
+
+                        <!-- Screen View: Splash View -->
+                        <div class="phone-screen active-screen" id="sim-screen-splash">
+                            <div class="splash-content-box">
+                                <img id="sim-splash-logo" src="" alt="Splash Logo" class="splash-logo">
+                                <h3 id="sim-splash-title">異環儲值</h3>
+                                <div class="splash-loader"></div>
+                            </div>
+                        </div>
+
+                        <!-- Screen View: App WebView View -->
+                        <div class="phone-screen" id="sim-screen-app">
+                            <div class="sim-appbar" id="sim-appbar">
+                                <button type="button" class="sim-appbar-icon"><i data-lucide="arrow-left"></i></button>
+                                <span class="sim-appbar-title" id="sim-app-title">異環儲值</span>
+                                <button type="button" id="sim-refresh-btn" class="sim-appbar-icon"><i data-lucide="rotate-cw"></i></button>
+                            </div>
+                            <div class="sim-webview-container">
+                                <iframe id="sim-iframe" src="about:blank" title="App WebView Simulation"></iframe>
+                                <div class="sim-iframe-overlay" id="sim-iframe-fallback">
+                                    <i data-lucide="globe"></i>
+                                    <p id="sim-url-display">https://example.com</p>
+                                    <span class="tag">WebView 即時模擬畫面</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Screen View: Launcher Home Screen -->
+                        <div class="phone-screen" id="sim-screen-home">
+                            <div class="home-wallpaper">
+                                <div class="home-grid">
+                                    <div class="app-icon-item">
+                                        <div class="icon-img-box">
+                                            <canvas id="sim-home-icon-canvas" width="128" height="128"></canvas>
+                                        </div>
+                                        <span class="icon-label" id="sim-home-app-title">異環儲值</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bottom Navigation Bar Indicator -->
+                        <div class="phone-home-bar"></div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Application Modules -->
+    <script src="js/icon-editor.js"></script>
+    <script src="js/project-exporter.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
