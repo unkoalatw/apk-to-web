@@ -1,11 +1,12 @@
 /**
  * Web2APK Studio - Cross-Platform Android SDK Official Compiler Engine (Option C)
- * Production Release Certificate, Adaptive Icons, SDK 21..34, and V1/V2/V3 signatures.
+ * Assembles assets, DEX bytecode via JSZip, Release Keystore, SDK 21..34, and V1/V2/V3 signatures.
  */
 
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const JSZip = require('jszip');
 
 class ApkCompiler {
     constructor() {
@@ -141,14 +142,13 @@ class ApkCompiler {
             fs.mkdirSync(path.join(tmpDir, 'res', 'mipmap-hdpi'), { recursive: true });
             fs.mkdirSync(path.join(tmpDir, 'res', 'mipmap-xhdpi'), { recursive: true });
             fs.mkdirSync(path.join(tmpDir, 'res', 'mipmap-xxhdpi'), { recursive: true });
-            fs.mkdirSync(path.join(tmpDir, 'res', 'mipmap-anydpi-v26'), { recursive: true });
             fs.mkdirSync(path.join(tmpDir, 'assets'), { recursive: true });
             
             const pkgPath = safePkg.replace(/\./g, '/');
             fs.mkdirSync(path.join(tmpDir, 'src', pkgPath), { recursive: true });
             fs.mkdirSync(path.join(tmpDir, 'bin'), { recursive: true });
 
-            // Step 2: Write AndroidManifest.xml (versionCode="1", versionName="1.0.0", SDK 21..34)
+            // Step 2: Write AndroidManifest.xml (explicit versionCode="1", versionName="1.0.0", SDK 21..34)
             const manifestContent = `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="${safePkg}"
@@ -168,7 +168,8 @@ class ApkCompiler {
         android:roundIcon="@mipmap/ic_launcher"
         android:hasCode="true"
         android:hardwareAccelerated="true"
-        android:supportsRtl="true">
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
 
         <activity
             android:name="${safePkg}.MainActivity"
@@ -186,7 +187,7 @@ class ApkCompiler {
 `;
             fs.writeFileSync(path.join(tmpDir, 'AndroidManifest.xml'), manifestContent);
 
-            // Step 3: Write res/values/strings.xml & colors.xml
+            // Step 3: Write res/values/strings.xml
             const stringsXml = `<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">${safeAppName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</string>
@@ -268,10 +269,10 @@ public class MainActivity extends Activity {
             // --- Step 7: AAPT2 Resource Compilation & Linking ---
             logFn('[1/5] 執行 aapt2 compile 與 link (versionCode=1, versionName=1.0.0, minSdkVersion=21, targetSdkVersion=34)...');
             this.execCmd(`"${tools.aapt2}" compile --dir res -o compiled_res.zip`, { cwd: tmpDir }, logFn);
-            this.execCmd(`"${tools.aapt2}" link -o unaligned.apk -I "${tools.androidJar}" --manifest AndroidManifest.xml compiled_res.zip -A assets --min-sdk-version 21 --target-sdk-version 34 --version-code 1 --version-name 1.0.0`, { cwd: tmpDir }, logFn);
+            this.execCmd(`"${tools.aapt2}" link -o unaligned_base.apk -I "${tools.androidJar}" --manifest AndroidManifest.xml compiled_res.zip -A assets --min-sdk-version 21 --target-sdk-version 34 --version-code 1 --version-name 1.0.0`, { cwd: tmpDir }, logFn);
 
             // --- Step 8: Java Compilation & D8 Bytecode Dexing ---
-            logFn('[2/5] 執行 javac 與 d8 編譯器生成 Dalvik Classes.dex...');
+            logFn('[2/5] 執行 javac 與 d8 編譯器 (release mode) 生成 Dalvik Classes.dex...');
             const javaFile = path.join(tmpDir, 'src', pkgPath, 'MainActivity.java');
             this.execCmd(`javac -cp "${tools.androidJar}" -d bin "${javaFile}"`, { cwd: tmpDir }, logFn);
 
@@ -286,18 +287,25 @@ public class MainActivity extends Activity {
             }
             findClasses(path.join(tmpDir, 'bin'));
 
-            this.execCmd(`"${tools.d8}" --lib "${tools.androidJar}" --min-api 21 --output bin ${classFiles.join(' ')}`, { cwd: tmpDir }, logFn);
+            this.execCmd(`"${tools.d8}" --release --min-api 21 --lib "${tools.androidJar}" --output bin ${classFiles.join(' ')}`, { cwd: tmpDir }, logFn);
 
-            // Add classes.dex into unaligned.apk
-            logFn('將 classes.dex 打包入 unaligned.apk...');
-            this.execCmd(`jar uf unaligned.apk -C bin classes.dex`, { cwd: tmpDir }, logFn);
+            // --- Step 9: JSZip Assembly (Safely merging classes.dex without corrupting headers) ---
+            logFn('使用 JSZip 將 classes.dex 整合入 unaligned.apk...');
+            const baseBuf = fs.readFileSync(path.join(tmpDir, 'unaligned_base.apk'));
+            const zip = await JSZip.loadAsync(baseBuf);
+            const dexBuf = fs.readFileSync(path.join(tmpDir, 'bin', 'classes.dex'));
 
-            // --- Step 9: Zipalign 4-Byte Alignment ---
+            zip.file('classes.dex', dexBuf, { compression: 'DEFLATE' });
+
+            const finalUnalignedBuf = await zip.generateAsync({ type: 'nodebuffer' });
+            fs.writeFileSync(path.join(tmpDir, 'unaligned.apk'), finalUnalignedBuf);
+
+            // --- Step 10: Zipalign 4-Byte Alignment ---
             logFn('[3/5] 執行 zipalign 4-Byte 記憶體對齊...');
             const alignedApk = path.join(tmpDir, 'aligned.apk');
             this.execCmd(`"${tools.zipalign}" -v -f 4 unaligned.apk "${alignedApk}"`, { cwd: tmpDir }, logFn);
 
-            // --- Step 10: Generate Release Keystore & APK Signature Scheme V1+V2+V3 ---
+            // --- Step 11: Generate Release Keystore & APK Signature Scheme V1+V2+V3 ---
             logFn('[4/5] 生成正式 Release Keystore (CN=Web2APK Studio) 並執行 apksigner 寫入 V1 + V2 + V3 數位簽署區塊...');
             const ksPath = path.join(scratchDir, 'release.keystore');
             if (!fs.existsSync(ksPath)) {
@@ -307,7 +315,7 @@ public class MainActivity extends Activity {
             const signedApk = path.join(tmpDir, `${safeAppName.replace(/[^\w]/g, '_')}.apk`);
             this.execCmd(`"${tools.apksigner}" sign --ks "${ksPath}" --ks-pass pass:releasekey123 --key-pass pass:releasekey123 --out "${signedApk}" "${alignedApk}"`, { cwd: tmpDir }, logFn);
 
-            // --- Step 11: Verify Signature ---
+            // --- Step 12: Verify Signature ---
             logFn('[5/5] 執行 apksigner verify 驗證 V1 / V2 / V3 簽署狀態...');
             const verifyRes = this.execCmd(`"${tools.apksigner}" verify --verbose "${signedApk}"`, { cwd: tmpDir }, logFn);
 
