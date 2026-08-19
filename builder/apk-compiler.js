@@ -1,6 +1,6 @@
 /**
  * Web2APK Studio - Cross-Platform Android SDK Official Compiler Engine (Option C)
- * Explicitly sets minSdkVersion=21, targetSdkVersion=34, adaptive icons, and V1/V2/V3 signatures.
+ * Explicitly sets versionCode=1, versionName=1.0.0, minSdkVersion=21, targetSdkVersion=34, and V1/V2/V3 signatures.
  */
 
 const fs = require('fs');
@@ -147,10 +147,12 @@ class ApkCompiler {
             fs.mkdirSync(path.join(tmpDir, 'src', pkgPath), { recursive: true });
             fs.mkdirSync(path.join(tmpDir, 'bin'), { recursive: true });
 
-            // Step 2: Write AndroidManifest.xml (explicitSdkVersion 21 to 34)
+            // Step 2: Write AndroidManifest.xml (explicit versionCode="1", versionName="1.0.0", SDK 21..34)
             const manifestContent = `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="${safePkg}">
+    package="${safePkg}"
+    android:versionCode="1"
+    android:versionName="1.0.0">
 
     <uses-sdk
         android:minSdkVersion="21"
@@ -261,10 +263,10 @@ public class MainActivity extends Activity {
 `;
             fs.writeFileSync(path.join(tmpDir, 'src', pkgPath, 'MainActivity.java'), mainActivityJava);
 
-            // --- Step 7: AAPT2 Resource Compilation & Linking with SDK 21..34 ---
-            logFn('[1/5] 執行 aapt2 compile 與 link (minSdkVersion=21, targetSdkVersion=34)...');
+            // --- Step 7: AAPT2 Resource Compilation & Linking with versionCode/Name & SDK 21..34 ---
+            logFn('[1/5] 執行 aapt2 compile 與 link (versionCode=1, versionName=1.0.0, minSdkVersion=21, targetSdkVersion=34)...');
             this.execCmd(`"${tools.aapt2}" compile --dir res -o compiled_res.zip`, { cwd: tmpDir }, logFn);
-            this.execCmd(`"${tools.aapt2}" link -o unaligned.apk -I "${tools.androidJar}" --manifest AndroidManifest.xml compiled_res.zip -A assets --min-sdk-version 21 --target-sdk-version 34`, { cwd: tmpDir }, logFn);
+            this.execCmd(`"${tools.aapt2}" link -o unaligned.apk -I "${tools.androidJar}" --manifest AndroidManifest.xml compiled_res.zip -A assets --min-sdk-version 21 --target-sdk-version 34 --version-code 1 --version-name 1.0.0`, { cwd: tmpDir }, logFn);
 
             // --- Step 8: Java Compilation & D8 Bytecode Dexing ---
             logFn('[2/5] 執行 javac 與 d8 編譯器生成 Dalvik Classes.dex...');
@@ -307,7 +309,7 @@ public class MainActivity extends Activity {
             logFn('[5/5] 執行 apksigner verify 驗證 V1 / V2 / V3 簽署狀態...');
             const verifyRes = this.execCmd(`"${tools.apksigner}" verify --verbose "${signedApk}"`, { cwd: tmpDir }, logFn);
 
-            logFn('🎉 APK 構建成功！100% 符合 Android 系統 Target SDK 34 V1/V2/V3 簽署規範！');
+            logFn('🎉 APK 構建成功！100% 符合 Android 系統 versionCode=1 V1/V2/V3 簽署規範！');
 
             const apkBytes = fs.readFileSync(signedApk);
 
